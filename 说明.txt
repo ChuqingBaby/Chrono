@@ -1,0 +1,74 @@
+Chrono 时钟  ——  源码与打包说明
+=====================================================================
+
+一、目录说明
+  src\Main.java          完整源码（单文件，零第三方依赖）
+  assets\chrono.ico      Windows 应用图标（由 appIcon() 用 Java2D 绘制生成）
+  tools\MakeIcon.java    把绘制结果导出为 .ico 的小工具
+  tools\Launcher.cs      单文件 exe 的启动器（内嵌运行时，首次运行自解压）
+  tools\SelfTest.java    核心逻辑自检（36 项断言，不需要界面）
+  tools\GuiProbe.java    界面自动探针（驱动真实界面验证各功能）
+  编译打包.bat            一键编译 + 打包
+  Chrono.jar             已编译好的可执行 jar，可直接 java -jar 运行
+
+二、开发环境
+  JDK 17 或更高（本项目用 JDK 25 打包，源代码编译目标为 17）
+  只用 JDK 自带模块（Swing / Java2D / javax.sound），无需 Maven、Gradle，无需联网下依赖
+
+三、手动编译与运行
+  1) 编译
+       javac --release 17 -encoding UTF-8 -d build\classes src\Main.java
+  2) 运行
+       java -cp build\classes Main
+  3) 运行已打好的 jar
+       java -jar Chrono.jar
+  4) 跑自检
+       javac -encoding UTF-8 -cp build\classes -d build\test tools\SelfTest.java
+       java -cp build\classes;build\test SelfTest
+
+四、打包成 exe
+  A. 一键脚本（推荐）
+       双击 编译打包.bat，产物在 out\Chrono\Chrono.exe
+  B. 手动 jpackage（免安装版，目录整体拷贝即可运行）
+       jpackage --type app-image --name Chrono ^
+         --input dist-input --main-jar Chrono.jar --main-class Main ^
+         --app-version 1.0.0 --icon assets\chrono.ico ^
+         --dest out ^
+         --java-options "-Dfile.encoding=UTF-8"
+     产物结构：out\Chrono\  ├ Chrono.exe（启动器）
+                            ├ app\Chrono.jar（程序本体）
+                            └ runtime\（自带 JRE，目标机无需装 Java）
+  C. 单文件 exe（把 B 的产物压成一个 exe）
+       1) 压缩：Compress-Archive -Path out\Chrono -DestinationPath payload.zip
+       2) 内嵌并编译：
+          csc /target:winexe /out:"Chrono-单文件版.exe" ^
+              /resource:payload.zip,payload.zip ^
+              /reference:System.IO.Compression.FileSystem.dll ^
+              /reference:System.IO.Compression.dll ^
+              /reference:System.Drawing.dll ^
+              /reference:System.Windows.Forms.dll ^
+              tools\Launcher.cs
+       首次运行会解压到 %%LOCALAPPDATA%%\ChronoApp，之后秒开。
+
+五、功能与代码位置对照
+  时钟：数字时间 + 模拟表盘 + 日期星期        cardClock() / BigTime / AnalogClock
+  桌面悬浮窗：无边框、置顶、可拖动、双击回主窗  OverlayClock
+  计时器：开始 / 暂停 / 继续 / 重置 / 计次分段   cardTimer() / toggleStopwatch() / addLap()
+  倒计时：预设 1/3/5/10/25 分钟与自定义时分秒    cardCountdown() / toggleCountdown()
+          进度条随时间变色（剩余不足 25%% 变红）  Bar
+  定时提醒：到指定日期时刻弹窗（一次性）        cardAlarm() / checkAlarms()
+  每日闹钟：每天固定时刻响铃，可单独启用/停用    Alarm.daily / checkAlarms()
+  提醒效果：窗口置顶弹出 + 标题栏闪烁 + 提示音 + 稍后 5 分钟  AlertWindow / fireAlert()
+  提示音：程序合成正弦波蜂鸣；无音频设备时退化为系统提示音     AlarmSound
+  黑色主题：文件顶部配色常量；窗口 setUndecorated(true) + 自绘 buildTitleBar()
+
+六、数据存储
+  闹钟列表与设置用 java.util.prefs 持久化，保存在注册表：
+  HKEY_CURRENT_USER\Software\JavaSoft\Prefs\chrono
+  关闭窗口默认最小化到系统托盘（可在标题栏齿轮里改成直接退出）。
+
+七、使用提示
+  1) 关闭窗口（X）默认最小化到托盘，闹钟与提醒仍会在后台触发。
+  2) 真正退出：托盘图标右键 → 退出，或标题栏齿轮 → 退出程序。
+  3) 悬浮窗位置会被记住；双击悬浮窗可唤回主窗口。
+  4) 闹钟列表里的勾选框可直接启用/停用，不用删除重建。
